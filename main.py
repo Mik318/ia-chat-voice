@@ -1,10 +1,12 @@
+from typing import Optional
+
 import os
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 from twilio.twiml.voice_response import VoiceResponse
 import google.generativeai as genai
-from gtts import gTTS
+from elevenlabs import ElevenLabs, VoiceSettings
 from dotenv import load_dotenv
 import hashlib
 import time
@@ -17,6 +19,11 @@ genai.configure(
     transport="rest"
 )
 
+# Configurar ElevenLabs
+elevenlabs_client = ElevenLabs(
+    api_key=os.getenv("ELEVENLABS_API_KEY")
+)
+
 app = FastAPI()
 
 # Crear carpeta para archivos de audio
@@ -27,16 +34,31 @@ os.makedirs(AUDIO_DIR, exist_ok=True)
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
 
-def generar_audio(texto: str, request: Request) -> str:
-    """Genera audio con gTTS (Google Text-to-Speech gratis)"""
+def generar_audio(texto: str, request: Request) -> Optional[str]:
+    """Genera audio con ElevenLabs (voces de alta calidad)"""
     try:
         texto_hash = hashlib.md5(texto.encode()).hexdigest()
         filename = f"{texto_hash}_{int(time.time())}.mp3"
         filepath = os.path.join(AUDIO_DIR, filename)
 
-        # Generar audio con gTTS
-        tts = gTTS(text=texto, lang="es", tld="com.mx", slow=False)
-        tts.save(filepath)
+        # Generar audio con ElevenLabs
+        # Usando la voz por defecto (puedes cambiarla por otra vía env var)
+        audio_generator = elevenlabs_client.text_to_speech.convert(
+            text=texto,
+            voice_id=os.getenv("ELEVEN_VOICE_ID", "7QQzpAyzlKTVrRzQJmTE"),
+            model_id="eleven_multilingual_v2",
+            voice_settings=VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.75,
+                style=0.0,
+                use_speaker_boost=True
+            )
+        )
+
+        # Guardar el audio
+        with open(filepath, "wb") as f:
+            for chunk in audio_generator:
+                f.write(chunk)
 
         # Construir URL pública
         base_url = str(request.base_url).rstrip('/')
@@ -74,17 +96,18 @@ async def inicio(request: Request):
         vr.say(texto, voice="Polly.Mia", language="es-MX")
 
     # Configuración MEJORADA para mejor reconocimiento
+    # Usamos attempt=1 para controlar reintentos si la confianza es baja
     vr.gather(
         input="speech",
-        action="/voice",
+        action="/voice?attempt=1",
         method="POST",
         language="es-MX",
         speechTimeout="auto",  # Detección automática de pausas
-        timeout=15,  # Más tiempo para hablar
+        timeout=30,  # Más tiempo para hablar
         profanityFilter=False,  # No filtrar palabras
         enhanced=True,  # Modelo de reconocimiento mejorado
         speechModel="phone_call",  # Modelo optimizado para llamadas
-        hints="ayuda información horario precio servicio consulta pregunta reserva cita atención cliente"
+        hints="ayuda información horario precio servicio consulta pregunta reserva cita atención cliente soporte venta inicio sesión contraseña"
     )
 
     return Response(content=str(vr), media_type="application/xml")
@@ -94,34 +117,69 @@ async def inicio(request: Request):
 async def voice(request: Request):
     form = await request.form()
     user_input = form.get("SpeechResult", "")
-    confidence = form.get("Confidence", "0")
+    confidence_raw = form.get("Confidence", "0")
+
+    # Obtener attempt desde query params (si viene de gather)
+    attempt = 1
+    try:
+        attempt = int(request.query_params.get("attempt", "1"))
+    except Exception:
+        attempt = 1
+
+    # Parseo seguro de la confianza
+    try:
+        confidence = float(confidence_raw)
+    except Exception:
+        confidence = 0.0
 
     # Log de confianza para debugging
-    print(f"📊 Confianza del reconocimiento: {confidence}")
+    print(f"📊 Intento={attempt} - Confianza del reconocimiento: {confidence} - Texto reconocido: '{user_input}'")
 
-    if not user_input or user_input.strip() == "":
-        vr = VoiceResponse()
-        texto = "No te escuché bien. Por favor, habla claro y di tu pregunta."
-        audio_url = generar_audio(texto, request)
+    # Si no detectó voz o la confianza es baja, permitimos hasta 3 intentos
+    MIN_CONFIDENCE = float(os.getenv("MIN_ASR_CONFIDENCE", "0.60"))
+    MAX_ATTEMPTS = int(os.getenv("MAX_ASR_ATTEMPTS", "3"))
 
-        if audio_url:
-            vr.play(audio_url)
+    if (not user_input or user_input.strip() == "") or confidence < MIN_CONFIDENCE:
+        if attempt < MAX_ATTEMPTS:
+            vr = VoiceResponse()
+            texto = "No te escuché bien o no estoy seguro. Por favor, repite tu pregunta con calma."
+            audio_url = generar_audio(texto, request)
+
+            if audio_url:
+                vr.play(audio_url)
+            else:
+                vr.say(texto, voice="Polly.Mia", language="es-MX")
+
+            # Re-gather con attempt incrementado
+            vr.gather(
+                input="speech",
+                action=f"/voice?attempt={attempt+1}",
+                method="POST",
+                language="es-MX",
+                speechTimeout="auto",
+                timeout=30,
+                profanityFilter=False,
+                enhanced=True,
+                speechModel="phone_call",
+                hints="sí no ayuda información pregunta consulta repetir"
+            )
+            return Response(content=str(vr), media_type="application/xml")
         else:
-            vr.say(texto, voice="Polly.Mia", language="es-MX")
+            # Después de MAX_ATTEMPTS ofrecemos dejar un mensaje grabado
+            vr = VoiceResponse()
+            texto = "Siento las molestias. Puedes dejar un mensaje después del tono y te responderemos por correo o llamada."
+            audio_url = generar_audio(texto, request)
 
-        vr.gather(
-            input="speech",
-            action="/voice",
-            method="POST",
-            language="es-MX",
-            speechTimeout="auto",
-            timeout=15,
-            profanityFilter=False,
-            enhanced=True,
-            speechModel="phone_call",
-            hints="sí no ayuda información pregunta consulta"
-        )
-        return Response(content=str(vr), media_type="application/xml")
+            if audio_url:
+                vr.play(audio_url)
+            else:
+                vr.say(texto, voice="Polly.Mia", language="es-MX")
+
+            # Iniciar grabación y notificar a /recording cuando termine
+            vr.record(action="/recording", method="POST", maxLength=120, playBeep=True, trim="trim-silence")
+            vr.hangup()
+
+            return Response(content=str(vr), media_type="application/xml")
 
     print(f"🎤 Usuario dijo: {user_input}")
 
@@ -171,11 +229,11 @@ Asistente:"""
         # Continuar escuchando con configuración mejorada
         vr.gather(
             input="speech",
-            action="/voice",
+            action="/voice?attempt=1",
             method="POST",
             language="es-MX",
             speechTimeout="auto",
-            timeout=15,
+            timeout=30,
             profanityFilter=False,
             enhanced=True,
             speechModel="phone_call",
@@ -189,6 +247,28 @@ Asistente:"""
             vr.play(audio_url)
         else:
             vr.say(texto_continuar, voice="Polly.Mia", language="es-MX")
+
+    return Response(content=str(vr), media_type="application/xml")
+
+
+@app.post("/recording")
+async def recording(request: Request):
+    """Endpoint que recibe el callback de la grabación de Twilio.
+    Twilio enviará RecordingUrl y otros metadatos.
+    Aquí simplemente confirmamos la recepción y agradecemos al usuario.
+    En un siguiente paso podríamos descargar la grabación y transcribirla con un servicio ASR externo.
+    """
+    form = await request.form()
+    recording_url = form.get("RecordingUrl") or form.get("RecordingUrl0")
+    recording_sid = form.get("RecordingSid")
+    print(f"📩 Grabación recibida: SID={recording_sid} URL={recording_url}")
+
+    vr = VoiceResponse()
+    texto = "Gracias. Hemos recibido tu mensaje y nos pondremos en contacto pronto."
+    # Nota: Request base_url no está disponible en este callback de Twilio de forma confiable
+    # así que usamos say como fallback
+    vr.say(texto, language="es-MX")
+    vr.hangup()
 
     return Response(content=str(vr), media_type="application/xml")
 
