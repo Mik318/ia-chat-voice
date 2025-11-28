@@ -6,4 +6,6 @@ elevenlabs
 python-dotenv
 python-multipart
 chromadb
+psycopg2-binary
+sqlalchemy
 google-cloud-speech

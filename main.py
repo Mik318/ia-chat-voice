@@ -13,6 +13,13 @@ import time
 import asyncio
 from contextlib import asynccontextmanager
 import chromadb
+from sqlalchemy.orm import Session
+from database import SessionLocal, engine, get_db
+import models
+from fastapi import Depends
+
+# Crear tablas
+models.Base.metadata.create_all(bind=engine)
 
 load_dotenv()
 
@@ -207,9 +214,23 @@ app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
 
 @app.post("/inicio")
-async def inicio(request: Request):
+async def inicio(request: Request, db: Session = Depends(get_db)):
     """Endpoint para cuando comienza la llamada"""
     limpiar_archivos_antiguos()
+    
+    # Obtener datos de la llamada
+    form = await request.form()
+    call_sid = form.get("CallSid")
+    from_number = form.get("From")
+    
+    # Crear registro de llamada
+    new_call = models.CallLog(
+        call_sid=call_sid,
+        user_phone=from_number,
+        interaction_log=[]
+    )
+    db.add(new_call)
+    db.commit()
 
     vr = VoiceResponse()
     texto = "¡Hola! Soy tu asistente de ORISOD Enzyme. ¿En qué puedo ayudarte hoy?"
@@ -242,8 +263,9 @@ async def inicio(request: Request):
 
 
 @app.post("/voice")
-async def voice(request: Request):
+async def voice(request: Request, db: Session = Depends(get_db)):
     form = await request.form()
+    call_sid = form.get("CallSid")
     user_input = form.get("SpeechResult", "")
     confidence_raw = form.get("Confidence", "0")
 
@@ -355,6 +377,24 @@ Asistente:"""
     except Exception as e:
         print(f"❌ Error al generar respuesta: {e}")
         respuesta = "Lo siento, estoy teniendo un problema técnico. ¿Puedes repetir tu pregunta?"
+
+    # Guardar interacción en DB
+    try:
+        call_log = db.query(models.CallLog).filter(models.CallLog.call_sid == call_sid).first()
+        if call_log:
+            # Actualizar log
+            current_log = list(call_log.interaction_log) if call_log.interaction_log else []
+            current_log.append({
+                "user": user_input,
+                "ai": respuesta,
+                "timestamp": time.time()
+            })
+            # Forzar actualización en SQLAlchemy (a veces no detecta cambios en JSON)
+            call_log.interaction_log = current_log
+            # flag_modified(call_log, "interaction_log") # Si fuera necesario
+            db.commit()
+    except Exception as e:
+        print(f"⚠️ Error guardando en DB: {e}")
 
     vr = VoiceResponse()
     audio_url = await generar_audio(respuesta, request)
