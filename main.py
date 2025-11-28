@@ -221,8 +221,8 @@ async def inicio(request: Request):
         input="speech",
         action="/voice?attempt=1",
         method="POST",
-        language="es-ES",  # Cambiado de es-MX a es-ES (mejor reconocimiento)
-        speechTimeout="2",  # 2 segundos (balance entre velocidad y precisión)
+        language="es-ES",  # Cambiado de es-MX a es-ES (mejor
+        speechTimeout="1",  # Detecta MUY rápido (1 seg de silencio)
         timeout=25,
         profanityFilter=False,
         enhanced=True,
@@ -283,12 +283,12 @@ async def voice(request: Request):
                 action=f"/voice?attempt={attempt+1}",
                 method="POST",
                 language="es-ES",
-                speechTimeout="2",
+                speechTimeout="1",
                 timeout=25,
                 profanityFilter=False,
                 enhanced=True,
                 speechModel="experimental_conversations",
-                hints="sí no ORISOD Enzyme, qué ofreces, qué productos, beneficios, precio, ingredientes, cómo funciona, antioxidante, romero, olivo, ayuda, información, pregunta, consulta, repetir"
+                hints="sí no ORISOD Enzyme, qué ofreces, qué productos, beneficios, precio, ingredientes, cómo funciona, antioxidante, romero, olivo, ayuda, información, pregunta, consulta, repetir, adiós, terminar, colgar"
             )
 
             if audio_url:
@@ -364,8 +364,16 @@ Asistente:"""
     else:
         vr.say(respuesta, voice="Polly.Mia", language="es-MX")
 
-    palabras_despedida = ["adiós", "adios", "chao", "hasta luego", "colgar", "terminar", "gracias adiós"]
-    if any(palabra in user_input.lower() for palabra in palabras_despedida):
+    # Verificar despedida (incluyendo variaciones fonéticas comunes)
+    palabras_despedida = ["adiós", "adios", "chao", "hasta luego", "colgar", "terminar", 
+                          "gracias adiós", "a dios", "dios", "ya es todo", "eso es todo", "bye"]
+    
+    # Normalizar input para comparación
+    input_lower = user_input.lower()
+    # Eliminar puntuación básica para evitar falsos negativos
+    input_clean = input_lower.replace(",", "").replace(".", "")
+    
+    if any(palabra in input_clean for palabra in palabras_despedida):
         texto_despedida = "¡Que tengas un excelente día! Hasta pronto."
         audio_url = await generar_audio(texto_despedida, request)
 
@@ -381,12 +389,12 @@ Asistente:"""
             action="/voice?attempt=1",
             method="POST",
             language="es-ES",
-            speechTimeout="2",
+            speechTimeout="1",
             timeout=25,
             profanityFilter=False,
             enhanced=True,
             speechModel="experimental_conversations",
-            hints="sí no ORISOD Enzyme, qué ofreces, qué productos, beneficios, precio, ingredientes, cómo funciona, antioxidante, romero, olivo, ayuda, más, otra pregunta, información"
+            hints="sí no ORISOD Enzyme, qué ofreces, qué productos, beneficios, precio, ingredientes, cómo funciona, antioxidante, romero, olivo, ayuda, más, otra pregunta, información, adiós, terminar, colgar"
         )
 
         texto_continuar = "¿Hay algo más en lo que pueda ayudarte?"
