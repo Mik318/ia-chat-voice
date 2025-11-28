@@ -12,6 +12,7 @@ import hashlib
 import time
 import asyncio
 from contextlib import asynccontextmanager
+import chromadb
 
 load_dotenv()
 
@@ -43,13 +44,52 @@ COMMON_MESSAGES = [
     "¡Que tengas un excelente día! Hasta pronto."
 ]
 
-# Cargar contexto de ORISOD
+# Inicializar ChromaDB para RAG
 try:
-    with open("contexto_orisod.txt", "r", encoding="utf-8") as f:
-        CONTEXTO_ORISOD = f.read()
+    chroma_client = chromadb.PersistentClient(path="./chroma_db")
+    knowledge_collection = chroma_client.get_collection("orisod_knowledge")
+    print("✅ ChromaDB cargado - RAG activado")
+    RAG_ENABLED = True
 except Exception as e:
-    print(f"⚠️ Error cargando contexto: {e}")
-    CONTEXTO_ORISOD = ""
+    print(f"⚠️ ChromaDB no disponible, usando contexto completo: {e}")
+    # Fallback: cargar contexto completo
+    try:
+        with open("contexto_orisod.txt", "r", encoding="utf-8") as f:
+            CONTEXTO_ORISOD = f.read()
+    except Exception as e2:
+        print(f"⚠️ Error cargando contexto: {e2}")
+        CONTEXTO_ORISOD = ""
+    RAG_ENABLED = False
+
+
+def buscar_contexto_relevante(pregunta: str, top_k: int = 3) -> str:
+    """Busca los chunks más relevantes del contexto usando RAG"""
+    if not RAG_ENABLED:
+        return CONTEXTO_ORISOD
+    
+    try:
+        # Generar embedding de la pregunta
+        result = genai.embed_content(
+            model="models/text-embedding-004",
+            content=pregunta,
+            task_type="retrieval_query"
+        )
+        query_embedding = result['embedding']
+        
+        # Buscar chunks más similares
+        results = knowledge_collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k
+        )
+        
+        # Combinar los chunks relevantes
+        contexto_relevante = "\n\n".join(results['documents'][0])
+        print(f"🔍 RAG: Recuperados {len(results['documents'][0])} chunks relevantes")
+        return contexto_relevante
+        
+    except Exception as e:
+        print(f"⚠️ Error en RAG, usando contexto completo: {e}")
+        return CONTEXTO_ORISOD if 'CONTEXTO_ORISOD' in globals() else ""
 
 
 
@@ -182,8 +222,8 @@ async def inicio(request: Request):
         action="/voice?attempt=1",
         method="POST",
         language="es-MX",
-        speechTimeout="3",  # Más tiempo para hablar
-        timeout=30,
+        speechTimeout="1",  # Detecta más rápido cuando el usuario deja de hablar
+        timeout=20,  # Reducido de 30 a 20 segundos
         profanityFilter=False,
         enhanced=True,
         speechModel="phone_call",
@@ -240,8 +280,8 @@ async def voice(request: Request):
                 action=f"/voice?attempt={attempt+1}",
                 method="POST",
                 language="es-MX",
-                speechTimeout="3",  # Más tiempo para hablar
-                timeout=30,
+                speechTimeout="1",  # Detecta más rápido
+                timeout=20,
                 profanityFilter=False,
                 enhanced=True,
                 speechModel="phone_call",
@@ -272,15 +312,16 @@ async def voice(request: Request):
 
     print(f"🎤 Usuario dijo: {user_input}")
 
+    # Buscar contexto relevante usando RAG
+    contexto_relevante = buscar_contexto_relevante(user_input, top_k=3)
+
     # Prompt mejorado para conversación natural con contexto ORISOD
-    prompt = f"""Eres un asistente virtual experto en ORISOD Enzyme®.
-Tu única función es responder preguntas sobre este producto basándote EXCLUSIVAMENTE en la siguiente información de contexto.
-No inventes información. Si la respuesta no está en el contexto, indica amablemente que no tienes esa información.
-Si el usuario pregunta sobre otros temas, recuérdale cortésmente que solo estás capacitado para hablar sobre ORISOD Enzyme®.
-Responde de forma breve (máximo 2-3 oraciones), natural y profesional.
+    prompt = f"""Eres un asistente virtual experto en ORISOD Enzyme®. Responde SOLO sobre este producto usando el contexto.
+Sé breve y directo: máximo 2 oraciones. Si no está en el contexto, di que no tienes esa información.
+Si preguntan de otro tema, indica que solo hablas de ORISOD Enzyme®.
 
 Contexto:
-{CONTEXTO_ORISOD}
+{contexto_relevante}
 
 Usuario: {user_input}
 Asistente:"""
@@ -291,7 +332,7 @@ Asistente:"""
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=150,
+                max_output_tokens=100,  # Reducido de 150 a 100 para respuestas más rápidas y concisas
             )
         )
         respuesta = result.text.strip()
@@ -325,8 +366,8 @@ Asistente:"""
             action="/voice?attempt=1",
             method="POST",
             language="es-MX",
-            speechTimeout="3",  # Más tiempo para hablar
-            timeout=30,
+            speechTimeout="1",  # Detecta más rápido
+            timeout=20,
             profanityFilter=False,
             enhanced=True,
             speechModel="phone_call",

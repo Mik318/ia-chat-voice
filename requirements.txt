@@ -5,3 +5,4 @@ google-generativeai
 elevenlabs
 python-dotenv
 python-multipart
+chromadb
