@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, engine, get_db
 import models
 from fastapi import Depends
+from routers import api
 
 # Crear tablas
 models.Base.metadata.create_all(bind=engine)
@@ -212,6 +213,8 @@ app = FastAPI(lifespan=lifespan)
 # Montar carpeta estática
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
 
+# Incluir routers
+app.include_router(api.router)
 
 @app.post("/inicio")
 async def inicio(request: Request, db: Session = Depends(get_db)):
@@ -404,16 +407,32 @@ Asistente:"""
     else:
         vr.say(respuesta, voice="Polly.Mia", language="es-MX")
 
-    # Verificar despedida (incluyendo variaciones fonéticas comunes)
-    palabras_despedida = ["adiós", "adios", "chao", "hasta luego", "colgar", "terminar", 
-                          "gracias adiós", "a dios", "dios", "ya es todo", "eso es todo", "bye"]
+    # Verificar despedida (Lógica MUY estricta)
+    # Solo aceptamos frases completas o palabras inequívocas de despedida
+    frases_cierre_exactas = [
+        "adiós", "adios", "bye", "chao", "bai", "nos vemos", "hasta luego", 
+        "hasta pronto", "colgar", "terminar llamada", "eso es todo", "ya es todo",
+        "muchas gracias adiós", "gracias adiós", "gracias bye", "a dios"
+    ]
     
-    # Normalizar input para comparación
-    input_lower = user_input.lower()
-    # Eliminar puntuación básica para evitar falsos negativos
-    input_clean = input_lower.replace(",", "").replace(".", "")
+    input_lower = user_input.lower().strip().replace(".", "").replace(",", "").replace("!", "")
     
-    if any(palabra in input_clean for palabra in palabras_despedida):
+    es_despedida = False
+    
+    # 1. Coincidencia exacta o frase contenida (pero segura)
+    if input_lower in frases_cierre_exactas:
+        es_despedida = True
+    
+    # 2. Si la frase termina con "adiós" o "bye"
+    elif input_lower.endswith("adiós") or input_lower.endswith("adios") or input_lower.endswith("bye"):
+        es_despedida = True
+        
+    # 3. Si la frase es SOLO "gracias" (opcional, a veces la gente cuelga así)
+    elif input_lower == "gracias" or input_lower == "muchas gracias":
+        # Podríamos preguntar "¿Algo más?" en lugar de colgar, pero por ahora asumimos cierre si es seco
+        pass 
+
+    if es_despedida:
         texto_despedida = "¡Que tengas un excelente día! Hasta pronto."
         audio_url = await generar_audio(texto_despedida, request)
 
