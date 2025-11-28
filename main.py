@@ -35,13 +35,22 @@ audio_cache: dict[str, str] = {}
 
 # Mensajes comunes para pre-generar
 COMMON_MESSAGES = [
-    "¡Hola! Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?",
+    "¡Hola! Soy tu asistente de ORISOD Enzyme. ¿En qué puedo ayudarte hoy?",
     "No te escuché bien o no estoy seguro. Por favor, repite tu pregunta con calma.",
     "Siento las molestias. Puedes dejar un mensaje después del tono y te responderemos por correo o llamada.",
     "Lo siento, estoy teniendo un problema técnico. ¿Puedes repetir tu pregunta?",
     "¿Hay algo más en lo que pueda ayudarte?",
     "¡Que tengas un excelente día! Hasta pronto."
 ]
+
+# Cargar contexto de ORISOD
+try:
+    with open("contexto_orisod.txt", "r", encoding="utf-8") as f:
+        CONTEXTO_ORISOD = f.read()
+except Exception as e:
+    print(f"⚠️ Error cargando contexto: {e}")
+    CONTEXTO_ORISOD = ""
+
 
 
 async def generar_audio(texto: str, request: Request) -> Optional[str]:
@@ -52,7 +61,8 @@ async def generar_audio(texto: str, request: Request) -> Optional[str]:
 
         # Verificar cache en memoria primero (instantáneo)
         if texto_hash in audio_cache:
-            print(f"✓ Audio desde cache: {texto[:30]}...")
+            print(f"✓ Audio desde cache (memoria): {texto[:30]}...")
+            print(f"  URL: {audio_cache[texto_hash]}")
             return audio_cache[texto_hash]
 
         # Verificar si existe en disco
@@ -60,10 +70,14 @@ async def generar_audio(texto: str, request: Request) -> Optional[str]:
         filepath = os.path.join(AUDIO_DIR, filename)
 
         if os.path.exists(filepath):
-            base_url = str(request.base_url).rstrip('/')
+            # Usar BASE_URL del .env si está disponible (para ngrok)
+            base_url = os.getenv("BASE_URL")
+            if not base_url:
+                base_url = str(request.base_url).rstrip('/')
             url = f"{base_url}/audio/{filename}"
             audio_cache[texto_hash] = url
             print(f"✓ Audio desde disco: {texto[:30]}...")
+            print(f"  URL generada: {url}")
             return url
 
         # Generar nuevo audio con modelo TURBO
@@ -75,10 +89,10 @@ async def generar_audio(texto: str, request: Request) -> Optional[str]:
                 voice_id=os.getenv("ELEVEN_VOICE_ID", "7QQzpAyzlKTVrRzQJmTE"),
                 model_id="eleven_turbo_v2_5",  # TURBO para velocidad 2-3x
                 voice_settings=VoiceSettings(
-                    stability=0.5,
-                    similarity_boost=0.75,
+                    stability=0.3,  # Menor estabilidad = más rápido
+                    similarity_boost=0.5,
                     style=0.0,
-                    use_speaker_boost=True
+                    use_speaker_boost=False  # Desactivar para menor latencia
                 )
             )
 
@@ -91,10 +105,14 @@ async def generar_audio(texto: str, request: Request) -> Optional[str]:
         await asyncio.to_thread(_generate)
 
         # Guardar en cache y retornar
-        base_url = str(request.base_url).rstrip('/')
+        # Usar BASE_URL del .env si está disponible (para ngrok)
+        base_url = os.getenv("BASE_URL")
+        if not base_url:
+            base_url = str(request.base_url).rstrip('/')
         url = f"{base_url}/audio/{filename}"
         audio_cache[texto_hash] = url
         print(f"✓ Audio generado: {texto[:30]}...")
+        print(f"  URL: {url}")
         return url
 
     except Exception as e:
@@ -154,7 +172,7 @@ async def inicio(request: Request):
     limpiar_archivos_antiguos()
 
     vr = VoiceResponse()
-    texto = "¡Hola! Soy tu asistente virtual. ¿En qué puedo ayudarte hoy?"
+    texto = "¡Hola! Soy tu asistente de ORISOD Enzyme. ¿En qué puedo ayudarte hoy?"
 
     audio_url = await generar_audio(texto, request)
 
@@ -164,12 +182,12 @@ async def inicio(request: Request):
         action="/voice?attempt=1",
         method="POST",
         language="es-MX",
-        speechTimeout="auto",
+        speechTimeout="3",  # Más tiempo para hablar
         timeout=30,
         profanityFilter=False,
         enhanced=True,
         speechModel="phone_call",
-        hints="ayuda información horario precio servicio consulta pregunta reserva cita atención cliente soporte venta inicio sesión contraseña"
+        hints="orisod enzyme antioxidante beneficios precio dosis ingredientes romero olivo mitocondria envejecimiento inflamación hígado detoxificación ayuda información"
     )
 
     if audio_url:
@@ -203,10 +221,15 @@ async def voice(request: Request):
     print(f"📊 Intento={attempt} - Confianza del reconocimiento: {confidence} - Texto reconocido: '{user_input}'")
 
     # Si no detectó voz o la confianza es baja, permitimos hasta 3 intentos
-    MIN_CONFIDENCE = float(os.getenv("MIN_ASR_CONFIDENCE", "0.60"))
+    # IMPORTANTE: Si tiene texto, lo aceptamos incluso con confianza 0.0
+    MIN_CONFIDENCE = float(os.getenv("MIN_ASR_CONFIDENCE", "0.50"))
     MAX_ATTEMPTS = int(os.getenv("MAX_ASR_ATTEMPTS", "3"))
 
-    if (not user_input or user_input.strip() == "") or confidence < MIN_CONFIDENCE:
+    # Priorizar texto reconocido sobre confianza
+    tiene_texto = user_input and user_input.strip() != ""
+    confianza_baja = confidence < MIN_CONFIDENCE
+    
+    if not tiene_texto or (confianza_baja and not tiene_texto):
         if attempt < MAX_ATTEMPTS:
             vr = VoiceResponse()
             texto = "No te escuché bien o no estoy seguro. Por favor, repite tu pregunta con calma."
@@ -217,12 +240,12 @@ async def voice(request: Request):
                 action=f"/voice?attempt={attempt+1}",
                 method="POST",
                 language="es-MX",
-                speechTimeout="auto",
+                speechTimeout="3",  # Más tiempo para hablar
                 timeout=30,
                 profanityFilter=False,
                 enhanced=True,
                 speechModel="phone_call",
-                hints="sí no ayuda información pregunta consulta repetir"
+                hints="sí no orisod enzyme antioxidante beneficios precio dosis ingredientes romero olivo ayuda información pregunta consulta repetir"
             )
 
             if audio_url:
@@ -245,15 +268,19 @@ async def voice(request: Request):
             # Iniciar grabación y notificar a /recording cuando termine
             vr.record(action="/recording", method="POST", maxLength=120, playBeep=True, trim="trim-silence")
             vr.hangup()
-
-            return Response(content=str(vr), media_type="application/xml")
+        return Response(content=str(vr), media_type="application/xml")
 
     print(f"🎤 Usuario dijo: {user_input}")
 
-    # Prompt mejorado para conversación natural
-    prompt = f"""Eres un asistente telefónico amable y profesional. 
-Responde de forma breve (máximo 2-3 oraciones) y natural.
-Si el usuario quiere terminar la llamada, despídete cordialmente.
+    # Prompt mejorado para conversación natural con contexto ORISOD
+    prompt = f"""Eres un asistente virtual experto en ORISOD Enzyme®.
+Tu única función es responder preguntas sobre este producto basándote EXCLUSIVAMENTE en la siguiente información de contexto.
+No inventes información. Si la respuesta no está en el contexto, indica amablemente que no tienes esa información.
+Si el usuario pregunta sobre otros temas, recuérdale cortésmente que solo estás capacitado para hablar sobre ORISOD Enzyme®.
+Responde de forma breve (máximo 2-3 oraciones), natural y profesional.
+
+Contexto:
+{CONTEXTO_ORISOD}
 
 Usuario: {user_input}
 Asistente:"""
@@ -298,12 +325,12 @@ Asistente:"""
             action="/voice?attempt=1",
             method="POST",
             language="es-MX",
-            speechTimeout="auto",
+            speechTimeout="3",  # Más tiempo para hablar
             timeout=30,
             profanityFilter=False,
             enhanced=True,
             speechModel="phone_call",
-            hints="sí si no ayuda más otra pregunta información horario precio"
+            hints="sí si no orisod enzyme antioxidante beneficios precio dosis ingredientes romero olivo ayuda más otra pregunta información"
         )
 
         texto_continuar = "¿Hay algo más en lo que pueda ayudarte?"
