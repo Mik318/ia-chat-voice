@@ -1,4 +1,4 @@
-# Asistente de Voz ORISOD Enzyme® 🤖💊
+# Asistente de Voz
 
 Este proyecto es un asistente virtual de voz inteligente diseñado para responder preguntas sobre **ORISOD Enzyme®**. Utiliza tecnologías avanzadas de IA para ofrecer una experiencia de conversación natural y rápida.
 
