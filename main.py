@@ -216,18 +216,18 @@ async def inicio(request: Request):
 
     audio_url = await generar_audio(texto, request)
 
-    # IMPORTANTE: Anidar play/say dentro del gather para que funcione
+    # Gather con configuración mejorada para español
     gather = vr.gather(
         input="speech",
         action="/voice?attempt=1",
         method="POST",
-        language="es-MX",
-        speechTimeout="1",  # Detecta más rápido cuando el usuario deja de hablar
-        timeout=20,  # Reducido de 30 a 20 segundos
+        language="es-ES",  # Cambiado de es-MX a es-ES (mejor reconocimiento)
+        speechTimeout="2",  # 2 segundos (balance entre velocidad y precisión)
+        timeout=25,
         profanityFilter=False,
         enhanced=True,
-        speechModel="phone_call",
-        hints="orisod enzyme antioxidante beneficios precio dosis ingredientes romero olivo mitocondria envejecimiento inflamación hígado detoxificación ayuda información"
+        speechModel="experimental_conversations",  # Modelo experimental más preciso
+        hints="ORISOD Enzyme, qué ofreces, qué productos, beneficios, precio, ingredientes, cómo funciona, antioxidante, romero, olivo"
     )
 
     if audio_url:
@@ -236,6 +236,9 @@ async def inicio(request: Request):
         gather.say(texto, voice="Polly.Mia", language="es-MX")
 
     return Response(content=str(vr), media_type="application/xml")
+
+
+
 
 
 @app.post("/voice")
@@ -279,13 +282,13 @@ async def voice(request: Request):
                 input="speech",
                 action=f"/voice?attempt={attempt+1}",
                 method="POST",
-                language="es-MX",
-                speechTimeout="1",  # Detecta más rápido
-                timeout=20,
+                language="es-ES",
+                speechTimeout="2",
+                timeout=25,
                 profanityFilter=False,
                 enhanced=True,
-                speechModel="phone_call",
-                hints="sí no orisod enzyme antioxidante beneficios precio dosis ingredientes romero olivo ayuda información pregunta consulta repetir"
+                speechModel="experimental_conversations",
+                hints="sí no ORISOD Enzyme, qué ofreces, qué productos, beneficios, precio, ingredientes, cómo funciona, antioxidante, romero, olivo, ayuda, información, pregunta, consulta, repetir"
             )
 
             if audio_url:
@@ -312,13 +315,25 @@ async def voice(request: Request):
 
     print(f"🎤 Usuario dijo: {user_input}")
 
-    # Buscar contexto relevante usando RAG
-    contexto_relevante = buscar_contexto_relevante(user_input, top_k=3)
+    # Detectar preguntas generales sobre productos/ofertas
+    preguntas_generales = ["qué ofreces", "que ofreces", "qué productos", "que productos", 
+                           "qué vendes", "que vendes", "cuál es tu producto", "cual es tu producto",
+                           "de qué trata", "de que trata", "qué es esto", "que es esto"]
+    
+    es_pregunta_general = any(pg in user_input.lower() for pg in preguntas_generales)
+    
+    if es_pregunta_general:
+        # Para preguntas generales, usar la descripción general completa
+        contexto_relevante = buscar_contexto_relevante("descripción general ORISOD Enzyme producto", top_k=2)
+    else:
+        # Para preguntas específicas, buscar contexto relevante
+        contexto_relevante = buscar_contexto_relevante(user_input, top_k=3)
 
     # Prompt mejorado para conversación natural con contexto ORISOD
     prompt = f"""Eres un asistente virtual experto en ORISOD Enzyme®. Responde SOLO sobre este producto usando el contexto.
-Sé breve y directo: máximo 2 oraciones. Si no está en el contexto, di que no tienes esa información.
-Si preguntan de otro tema, indica que solo hablas de ORISOD Enzyme®.
+Sé breve y directo: máximo 2 oraciones. 
+Si preguntan qué ofreces o cuál es tu producto, responde que ofreces ORISOD Enzyme® y explica brevemente qué es.
+Si no está en el contexto, di que no tienes esa información.
 
 Contexto:
 {contexto_relevante}
@@ -365,13 +380,13 @@ Asistente:"""
             input="speech",
             action="/voice?attempt=1",
             method="POST",
-            language="es-MX",
-            speechTimeout="1",  # Detecta más rápido
-            timeout=20,
+            language="es-ES",
+            speechTimeout="2",
+            timeout=25,
             profanityFilter=False,
             enhanced=True,
-            speechModel="phone_call",
-            hints="sí si no orisod enzyme antioxidante beneficios precio dosis ingredientes romero olivo ayuda más otra pregunta información"
+            speechModel="experimental_conversations",
+            hints="sí no ORISOD Enzyme, qué ofreces, qué productos, beneficios, precio, ingredientes, cómo funciona, antioxidante, romero, olivo, ayuda, más, otra pregunta, información"
         )
 
         texto_continuar = "¿Hay algo más en lo que pueda ayudarte?"
