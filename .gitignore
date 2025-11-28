@@ -1,0 +1,20 @@
+# Entorno virtual
+venv/
+env/
+.env
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# IDEs
+.idea/
+.vscode/
+
+# Archivos generados
+audio_files/
+chroma_db/
+
+# Logs y temporales
+*.log
+.DS_Store
