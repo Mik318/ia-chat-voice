@@ -30,6 +30,7 @@ genai.configure(
     api_key=os.getenv("GEMINI_API_KEY"),
     transport="rest"
 )
+print(f"🤖 Gemini configurado - Modelo: {os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')}")
 
 # Configurar ElevenLabs
 elevenlabs_client = ElevenLabs(
@@ -392,7 +393,9 @@ Usuario: {user_input}
 Asistente:"""
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
+        # Usar gemini-1.5-flash (mayor cuota gratuita que 2.0-flash)
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name)
         result = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -403,8 +406,14 @@ Asistente:"""
         respuesta = result.text.strip()
         print(f"🤖 IA responde: {respuesta}")
     except Exception as e:
-        print(f"❌ Error al generar respuesta: {e}")
-        respuesta = "Lo siento, estoy teniendo un problema técnico. ¿Puedes repetir tu pregunta?"
+        error_str = str(e)
+        # Detectar quota exceeded específicamente
+        if "429" in error_str or "quota" in error_str.lower():
+            print(f"⚠️ Cuota de Gemini excedida - Usando respuesta genérica")
+            respuesta = "Lo siento, estoy experimentando alta demanda en este momento. Por favor, deja tus datos de contacto y te responderemos pronto."
+        else:
+            print(f"❌ Error al generar respuesta: {e}")
+            respuesta = "Lo siento, estoy teniendo un problema técnico. ¿Puedes repetir tu pregunta?"
 
     # Guardar interacción en DB
     try:
