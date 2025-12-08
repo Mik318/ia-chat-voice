@@ -104,6 +104,11 @@ def buscar_contexto_relevante(pregunta: str, top_k: int = 3) -> str:
 
 async def generar_audio(texto: str, request: Request) -> Optional[str]:
     """Genera audio con ElevenLabs con cache y modelo turbo para máxima velocidad"""
+    # Verificar si ElevenLabs está habilitado (permite desactivarlo temporalmente)
+    if os.getenv("ENABLE_ELEVENLABS", "true").lower() == "false":
+        print(f"⚠️ ElevenLabs desactivado, usando Twilio TTS fallback")
+        return None
+    
     try:
         # Hash simple del texto para cache permanente
         texto_hash = hashlib.md5(texto.encode()).hexdigest()
@@ -165,7 +170,12 @@ async def generar_audio(texto: str, request: Request) -> Optional[str]:
         return url
 
     except Exception as e:
-        print(f"❌ Error generando audio: {e}")
+        # Solo mostrar error detallado si NO es quota exceeded (evitar spam en logs)
+        error_str = str(e)
+        if "quota_exceeded" in error_str:
+            print(f"⚠️ Cuota ElevenLabs excedida, usando fallback Twilio TTS")
+        else:
+            print(f"❌ Error generando audio: {e}")
         return None
 
 
@@ -187,6 +197,11 @@ async def lifespan(app_instance: FastAPI):
 
     # Función de pre-warming que se ejecuta completamente en background
     async def prewarm():
+        # Solo pre-generar si ElevenLabs está habilitado
+        if os.getenv("ENABLE_ELEVENLABS", "true").lower() == "false":
+            print("⚠️ ElevenLabs desactivado - Saltando pre-warming de audios")
+            return
+            
         print("⚡ Pre-generando audios comunes en background...")
         class MockRequest:
             def __init__(self):
