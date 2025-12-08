@@ -32,20 +32,28 @@ ENABLE_ELEVENLABS=false
 
 ---
 
-### 2️⃣ Cambiar modelo de Gemini a 1.5 Flash
+### 2️⃣ Cambiar modelo de Gemini a uno estable
 
 Agrega o modifica en tu `.env`:
 
 ```bash
-GEMINI_MODEL=gemini-1.5-flash
+GEMINI_MODEL=gemini-pro
 ```
 
-**Efecto:** Cambia a Gemini 1.5 Flash que tiene mayor cuota gratuita.
+**Efecto:** Cambia a Gemini Pro que es el modelo más estable y compatible.
 
-**Cuotas comparadas:**
+**Errores comunes y soluciones:**
 
-- `gemini-2.0-flash` (nuevo) - Límite bajo en free tier
-- `gemini-1.5-flash` (estable) - Límite alto: **15 RPM, 1M TPM, 1500 RPD**
+| Error                   | Causa                           | Solución                           |
+| ----------------------- | ------------------------------- | ---------------------------------- |
+| **429** Quota exceeded  | Límite de requests excedido     | Usar `gemini-pro` o esperar reset  |
+| **404** Model not found | Nombre incorrecto o SDK antiguo | Usar `gemini-pro` (más compatible) |
+
+**Cuotas comparadas (Free Tier):**
+
+- `gemini-pro` (estable) - **60 RPM, mayor compatibilidad**
+- `gemini-1.5-pro` (nuevo) - Requiere SDK actualizado
+- `gemini-2.0-flash` (experimental) - Límite muy bajo
 
 ---
 
@@ -81,8 +89,8 @@ Please retry in 35.678458329s
 En tu `.env`:
 
 ```bash
-# Usar Gemini 1.5 Flash (mayor cuota)
-GEMINI_MODEL=gemini-1.5-flash
+# Usar Gemini Pro (estable y confiable)
+GEMINI_MODEL=gemini-pro
 
 # Desactivar ElevenLabs si no necesitas calidad premium
 ENABLE_ELEVENLABS=false
@@ -98,8 +106,8 @@ ENABLE_ELEVENLABS=true
 En tu `.env`:
 
 ```bash
-# Gemini 1.5 Flash para desarrollo (más generoso)
-GEMINI_MODEL=gemini-1.5-flash
+# Gemini Pro para desarrollo (estable)
+GEMINI_MODEL=gemini-pro
 
 # ElevenLabs desactivado para ahorrar créditos
 ENABLE_ELEVENLABS=false
@@ -157,6 +165,6 @@ Ejecuta:
 Y revisa los logs al iniciar el servidor para ver qué modelo se está usando:
 
 ```
-🤖 Usando modelo: gemini-1.5-flash
+🤖 Gemini configurado - Modelo: gemini-pro
 ⚠️ ElevenLabs desactivado - Saltando pre-warming de audios
 ```

@@ -30,7 +30,7 @@ genai.configure(
     api_key=os.getenv("GEMINI_API_KEY"),
     transport="rest"
 )
-print(f"🤖 Gemini configurado - Modelo: {os.getenv('GEMINI_MODEL', 'gemini-1.5-flash')}")
+print(f"🤖 Gemini configurado - Modelo: {os.getenv('GEMINI_MODEL', 'gemini-pro')}")
 
 # Configurar ElevenLabs
 elevenlabs_client = ElevenLabs(
@@ -393,8 +393,9 @@ Usuario: {user_input}
 Asistente:"""
 
     try:
-        # Usar gemini-1.5-flash (mayor cuota gratuita que 2.0-flash)
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        # Usar gemini-pro (modelo estable y ampliamente disponible)
+        # Alternativas: gemini-1.5-pro, gemini-1.5-flash (requieren SDK actualizado)
+        model_name = os.getenv("GEMINI_MODEL", "gemini-pro")
         model = genai.GenerativeModel(model_name)
         result = model.generate_content(
             prompt,
