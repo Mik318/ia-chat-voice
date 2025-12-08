@@ -214,7 +214,7 @@ app = FastAPI(lifespan=lifespan)
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200", "https://mik318.github.io"],
+    allow_origins=["http://localhost:4200", "https://mik318.github.io", "https://call-asist.sistems-mik3.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
