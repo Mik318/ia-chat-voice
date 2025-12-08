@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from twilio.twiml.voice_response import VoiceResponse
 import google.generativeai as genai
 from elevenlabs import ElevenLabs, VoiceSettings
@@ -209,6 +210,15 @@ async def lifespan(app_instance: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Configurar CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:4200", "https://mik318.github.io"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Montar carpeta estática
 app.mount("/audio", StaticFiles(directory=AUDIO_DIR), name="audio")
