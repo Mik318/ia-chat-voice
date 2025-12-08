@@ -401,10 +401,17 @@ Asistente:"""
             prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=100,  # Reducido de 150 a 100 para respuestas más rápidas y concisas
+                max_output_tokens=300,  # Aumentado de 100 a 300 para evitar error de MAX_TOKENS con respuesta vacía
             )
         )
-        respuesta = result.text.strip()
+        
+        # Verificar si hay partes generadas antes de acceder a text
+        if result.parts:
+            respuesta = result.text.strip()
+        else:
+            print(f"⚠️ Gemini retornó respuesta vacía. Finish reason: {result.candidates[0].finish_reason if result.candidates else 'Unknown'}")
+            respuesta = "Lo siento, no pude generar una respuesta. ¿Puedes preguntar de otra forma?"
+            
         print(f"🤖 IA responde: {respuesta}")
     except Exception as e:
         error_str = str(e)
