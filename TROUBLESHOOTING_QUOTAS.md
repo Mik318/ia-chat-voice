@@ -51,9 +51,11 @@ GEMINI_MODEL=gemini-pro
 
 **Cuotas comparadas (Free Tier):**
 
-- `gemini-pro` (estable) - **60 RPM, mayor compatibilidad**
-- `gemini-1.5-pro` (nuevo) - Requiere SDK actualizado
-- `gemini-2.0-flash` (experimental) - Límite muy bajo
+- `gemini-2.0-flash-lite` (recomendado) - **Eficiente y disponible**
+- `gemini-2.0-flash` (potente) - Puede tener límites más estrictos
+- `gemini-2.5-flash` (nuevo) - Experimental
+
+**Nota:** Modelos antiguos como `gemini-pro` o `gemini-1.5-flash` NO están disponibles en tu cuenta actual.
 
 ---
 
@@ -89,8 +91,8 @@ Please retry in 35.678458329s
 En tu `.env`:
 
 ```bash
-# Usar Gemini Pro (estable y confiable)
-GEMINI_MODEL=gemini-pro
+# Usar Gemini 2.0 Flash Lite (disponible y eficiente)
+GEMINI_MODEL=gemini-2.0-flash-lite
 
 # Desactivar ElevenLabs si no necesitas calidad premium
 ENABLE_ELEVENLABS=false
@@ -106,8 +108,8 @@ ENABLE_ELEVENLABS=true
 En tu `.env`:
 
 ```bash
-# Gemini Pro para desarrollo (estable)
-GEMINI_MODEL=gemini-pro
+# Gemini 2.0 Flash Lite para desarrollo
+GEMINI_MODEL=gemini-2.0-flash-lite
 
 # ElevenLabs desactivado para ahorrar créditos
 ENABLE_ELEVENLABS=false
@@ -165,6 +167,6 @@ Ejecuta:
 Y revisa los logs al iniciar el servidor para ver qué modelo se está usando:
 
 ```
-🤖 Gemini configurado - Modelo: gemini-pro
+🤖 Gemini configurado - Modelo: gemini-2.0-flash-lite
 ⚠️ ElevenLabs desactivado - Saltando pre-warming de audios
 ```
