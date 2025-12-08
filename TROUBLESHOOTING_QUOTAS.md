@@ -51,11 +51,11 @@ GEMINI_MODEL=gemini-pro
 
 **Cuotas comparadas (Free Tier):**
 
-- `gemini-2.0-flash-lite` (recomendado) - **Eficiente y disponible**
-- `gemini-2.0-flash` (potente) - Puede tener límites más estrictos
-- `gemini-2.5-flash` (nuevo) - Experimental
+- `gemini-2.5-flash` (recomendado) - **✅ FUNCIONANDO**
+- `gemini-2.0-flash-lite` - Quota Exceeded (actualmente)
+- `gemini-2.0-flash` - Quota Exceeded
 
-**Nota:** Modelos antiguos como `gemini-pro` o `gemini-1.5-flash` NO están disponibles en tu cuenta actual.
+**Nota:** Hemos detectado que solo `gemini-2.5-flash` tiene cuota disponible en tu cuenta.
 
 ---
 
@@ -167,6 +167,6 @@ Ejecuta:
 Y revisa los logs al iniciar el servidor para ver qué modelo se está usando:
 
 ```
-🤖 Gemini configurado - Modelo: gemini-2.0-flash-lite
+🤖 Gemini configurado - Modelo: gemini-2.5-flash
 ⚠️ ElevenLabs desactivado - Saltando pre-warming de audios
 ```
